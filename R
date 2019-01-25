@@ -1,0 +1,132 @@
+setwd('C:\\Users\\asus\\Desktop\\112935')
+
+data = read.csv('data.csv')
+require(mgcv)
+
+#date -> week
+week = as.numeric(as.Date(as.character(data$日期)) - as.Date('2013/12/2'))
+week = week %% 7 + 1
+data$Mon = 1*(week==1)
+data$Tues = 1*(week==2)
+data$Wed = 1*(week==3)
+data$Thur = 1*(week==4)
+data$Fri = 1*(week==5)
+data$Sat = 1*(week==6)
+
+data = data[,-2]
+
+n = nrow(data)
+#逐个变量计算滞后效应
+lagRR = NULL
+lagRRse = NULL
+for(i in 0:5){
+  lagdata = cbind(data[1:(n-i),c("PM2.5","PM10","SO2","CO","NO2","O3_8h")],
+                  num = data[(i+1):n, c('num')])
+  model = summary(gam(num~PM2.5, family=poisson(link = "log"), data=lagdata))
+  b = model$p.coeff[2]; bse = model$se[2]
+  model = summary(gam(num~PM10, family=poisson(link = "log"), data=lagdata))
+  c = model$p.coeff[2]; cse = model$se[2]
+  model = summary(gam(num~SO2, family=poisson(link = "log"), data=lagdata))
+  d = model$p.coeff[2]; dse = model$se[2]
+  model = summary(gam(num~CO, family=poisson(link = "log"), data=lagdata))
+  e = model$p.coeff[2]; ese = model$se[2]
+  model = summary(gam(num~NO2, family=poisson(link = "log"), data=lagdata))
+  f = model$p.coeff[2]; fse = model$se[2]
+  model = summary(gam(num~O3_8h, family=poisson(link = "log"), data=lagdata))
+  g = model$p.coeff[2]; gse = model$se[2]
+  lagRR = rbind(lagRR, c(b,c,d,e,f,g))
+  lagRRse = rbind(lagRRse,c(bse,cse,dse,ese,fse,gse))
+}
+
+rownames(lagRR) = rownames(lagRRse) = paste0('Lag=', 0:5)
+colnames(lagRR) = colnames(lagRRse) = c("PM2.5","PM10","SO2","CO","NO2","O3_8h")
+write.csv(exp(lagRR), file = 'LagRR.csv')
+write.csv(exp(lagRRse), file = 'LagRRse.csv')
+
+require(Hmisc)
+for(i in 1:ncol(lagRR)){
+  jpeg(paste0(colnames(lagRR)[i],'.jpeg'))
+  errbar(0:5, exp(lagRR[,i]), 
+         exp(lagRR[,i]+qnorm(0.975)*lagRRse[,i]),
+         exp(lagRR[,i]-qnorm(0.975)*lagRRse[,i]),
+         xlab = "Lag", ylab = "RR(95%CI)", main = colnames(lagRR)[i])
+  dev.off()
+}
+
+
+#取R2最大的滞后阶数
+apply(lagRR, 2, which.max)-1
+
+
+##将数据滞后对齐
+newdata = data[6:n,]
+newdata$PM2.5 = data$PM2.5[(1-2+5):(n-2)]
+newdata$PM10 = data$PM10[(1-5+5):(n-5)]
+newdata$SO2 = data$SO2[(1-3+5):(n-3)]
+newdata$CO = data$CO[(1-4+5):(n-4)]
+newdata$NO2 = data$NO2[(1-4+5):(n-4)]
+newdata$O3_8h = data$O3_8h[(1-0+5):(n-0)]
+
+#所有变量gam回归
+model = gam(num~PM2.5+PM10+SO2+CO+NO2+O3_8h+Mon+
+              Tues+Wed+Thur+Fri+Sat + s(temp)+s(wind)+s(water), 
+            family=poisson(link = "log"), data = newdata)
+summary(model)
+
+res = summary(model)
+write.csv(res$p.table, file = 'ptable.csv')
+write.csv(res$s.table, file = 'stable.csv')
+
+
+
+model = gam(num~SO2+CO+O3_8h+Mon+
+              Tues+Wed+Thur+Fri+Sat + s(temp)+s(wind)+s(water), 
+            family=poisson(link = "log"), data = newdata)
+summary(model)
+
+res = summary(model)
+write.csv(res$p.table, file = 'sig-ptable.csv')
+write.csv(res$s.table, file = 'sig-stable.csv')
+
+
+model = gam(num~PM2.5+Mon+Tues+Wed+Thur+Fri+Sat + s(temp)+s(wind)+s(water), 
+            family=poisson(link = "log"), data = newdata)
+res = summary(model)
+write.csv(res$p.table, file = 'PM2.5-ptable.csv')
+write.csv(res$s.table, file = 'PM2.5-stable.csv')
+
+
+model = gam(num~PM2.5+Mon+Tues+Wed+Thur+Fri+Sat + s(temp)+s(wind)+s(water), 
+            family=poisson(link = "log"), data = newdata)
+res = summary(model)
+write.csv(res$p.table, file = 'PM10-ptable.csv')
+write.csv(res$s.table, file = 'PM10-stable.csv')
+
+
+
+model = gam(num~SO2+Mon+Tues+Wed+Thur+Fri+Sat + s(temp)+s(wind)+s(water), 
+            family=poisson(link = "log"), data = newdata)
+res = summary(model)
+write.csv(res$p.table, file = 'SO2-ptable.csv')
+write.csv(res$s.table, file = 'SO2-stable.csv')
+
+
+model = gam(num~CO+Mon+Tues+Wed+Thur+Fri+Sat + s(temp)+s(wind)+s(water), 
+            family=poisson(link = "log"), data = newdata)
+res = summary(model)
+write.csv(res$p.table, file = 'CO-ptable.csv')
+write.csv(res$s.table, file = 'CO-stable.csv')
+
+
+model = gam(num~NO2+Mon+Tues+Wed+Thur+Fri+Sat + s(temp)+s(wind)+s(water), 
+            family=poisson(link = "log"), data = newdata)
+res = summary(model)
+write.csv(res$p.table, file = 'NO2-ptable.csv')
+write.csv(res$s.table, file = 'NO2-stable.csv')
+
+
+model = gam(num~O3_8h+Mon+Tues+Wed+Thur+Fri+Sat + s(temp)+s(wind)+s(water), 
+            family=poisson(link = "log"), data = newdata)
+res = summary(model)
+write.csv(res$p.table, file = 'O3_8h-ptable.csv')
+write.csv(res$s.table, file = 'O3_8h-stable.csv')
